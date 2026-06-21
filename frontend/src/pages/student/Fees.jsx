@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, Clock, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Clock, CheckCircle2, Printer, Eye } from 'lucide-react';
 import api from '../../api/axios';
 import { PageHeader, Badge, Spinner, Pagination, EmptyState, StatCard } from '../../components/common/UI';
+import ReceiptModal from '../../components/common/ReceiptModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function StudentFees() {
+  const { user } = useAuth();
   const [payments, setPayments] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [printBill, setPrintBill] = useState(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -31,7 +35,7 @@ export default function StudentFees() {
 
   return (
     <div>
-      <PageHeader title="Fee Payment" subtitle="Your payment history and pending dues" />
+      <PageHeader title="Fee Payment" subtitle="Your payment history, bills and pending dues" />
 
       <div className="grid grid-cols-3 gap-4 mb-6">
         <StatCard label="Total Paid" value={`₹${totalPaid.toLocaleString()}`} icon={CheckCircle2} color="#059669" />
@@ -51,11 +55,11 @@ export default function StudentFees() {
       <div className="card overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-100">
-            <tr>{['Receipt No.', 'Fee Type', 'Period', 'Amount', 'Due Date', 'Paid Date', 'Status'].map(h => <th key={h} className="table-th">{h}</th>)}</tr>
+            <tr>{['Receipt No.', 'Fee Type', 'Period', 'Amount', 'Due Date', 'Paid Date', 'Status', 'Bill'].map(h => <th key={h} className="table-th">{h}</th>)}</tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan={7}><Spinner /></td></tr>
-              : payments.length === 0 ? <tr><td colSpan={7}><EmptyState title="No payment records" description="Your fee records will appear here." /></td></tr>
+            {loading ? <tr><td colSpan={8}><Spinner /></td></tr>
+              : payments.length === 0 ? <tr><td colSpan={8}><EmptyState title="No payment records" description="Your fee records will appear here." /></td></tr>
               : payments.map(p => (
                 <tr key={p._id} className="table-row">
                   <td className="table-td font-mono text-xs text-gray-500">{p.receiptNumber}</td>
@@ -65,6 +69,16 @@ export default function StudentFees() {
                   <td className="table-td text-xs">{p.dueDate ? new Date(p.dueDate).toLocaleDateString('en-IN') : '—'}</td>
                   <td className="table-td text-xs">{p.paidDate ? new Date(p.paidDate).toLocaleDateString('en-IN') : '—'}</td>
                   <td className="table-td"><Badge label={p.status} variant={p.status} /></td>
+                  <td className="table-td">
+                    {p.status === 'paid' ? (
+                      <button onClick={() => setPrintBill(p)}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-lg hover:bg-accent/20 transition-colors">
+                        <Printer size={12} /> View Bill
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
           </tbody>
@@ -77,6 +91,13 @@ export default function StudentFees() {
           <p className="text-sm font-semibold text-amber-800">⚠️ You have pending/overdue dues. Please visit the hostel fee counter or contact your warden to make payment.</p>
         </div>
       )}
+
+      {/* Printable Bill */}
+      <ReceiptModal
+        open={!!printBill}
+        paymentId={printBill?._id}
+        onClose={() => setPrintBill(null)}
+      />
     </div>
   );
 }

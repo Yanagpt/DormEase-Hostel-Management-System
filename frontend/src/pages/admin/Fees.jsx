@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, DollarSign, TrendingUp, Clock, AlertCircle, CreditCard, Eye } from 'lucide-react';
+import { Plus, Search, DollarSign, TrendingUp, Clock, AlertCircle, CreditCard, Eye, Printer } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { PageHeader, Badge, Modal, Spinner, Pagination, EmptyState, StatCard, FormField } from '../../components/common/UI';
+import ReceiptModal from '../../components/common/ReceiptModal';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const PAYMENT_METHODS = ['cash','online','upi','bank-transfer','cheque','dd'];
@@ -33,6 +34,9 @@ export default function AdminFees() {
 
   // View receipt modal
   const [receiptModal, setReceiptModal] = useState(null);
+
+  // Printable bill modal
+  const [printBill, setPrintBill] = useState(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -181,6 +185,14 @@ export default function AdminFees() {
                         title="View details">
                         <Eye size={14} />
                       </button>
+                      {/* Print bill — only for paid records */}
+                      {p.status === 'paid' && (
+                        <button onClick={() => setPrintBill(p)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-accent transition-colors"
+                          title="Print bill / receipt">
+                          <Printer size={14} />
+                        </button>
+                      )}
                       {/* Mark paid / Collect */}
                       {p.status !== 'paid' && (
                         <button
@@ -355,6 +367,13 @@ export default function AdminFees() {
           </div>
         </form>
       </Modal>
+
+      {/* Printable Bill / Receipt */}
+      <ReceiptModal
+        open={!!printBill}
+        paymentId={printBill?._id}
+        onClose={() => setPrintBill(null)}
+      />
     </div>
   );
 }

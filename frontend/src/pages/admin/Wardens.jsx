@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Shield, Eye, UserX, UserCheck, Trash2, Copy, KeyRound } from 'lucide-react';
+import { Plus, Search, Shield, Eye, UserX, UserCheck, Trash2, Copy, KeyRound, RefreshCw } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -14,6 +14,10 @@ export default function AdminWardens() {
   const [submitting, setSubmitting] = useState(false);
   const [newCreds, setNewCreds] = useState(null);
   const [viewW, setViewW] = useState(null);
+  const [resetTarget, setResetTarget] = useState(null);
+  const [resetPw, setResetPw] = useState('Password@123');
+  const [resetting, setResetting] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
 
   useEffect(() => {
     load();
@@ -67,6 +71,25 @@ export default function AdminWardens() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed');
+    }
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    if (!resetPw || resetPw.length < 6) {
+      toast.error('Password must be at least 6 characters.');
+      return;
+    }
+    setResetting(true);
+    try {
+      const res = await api.put('/users/' + resetTarget._id + '/reset-password', { newPassword: resetPw });
+      setResetResult({ email: res.data.data.email, password: res.data.data.newPassword });
+      setResetTarget(null);
+      toast.success('Password reset successfully.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -169,6 +192,10 @@ export default function AdminWardens() {
                     <div className="flex gap-1">
                       <button onClick={() => setViewW(w)} className="btn-ghost p-1.5" title="View">
                         <Eye size={14} />
+                      </button>
+                      <button onClick={() => { setResetTarget(w); setResetPw('Password@123'); }}
+                        className="btn-ghost p-1.5" title="Reset password">
+                        <RefreshCw size={14} className="text-blue-500" />
                       </button>
                       <button onClick={() => handleToggle(w)} className="btn-ghost p-1.5"
                         title={w.isActive ? 'Deactivate' : 'Activate'}>
@@ -312,6 +339,83 @@ export default function AdminWardens() {
                 </button>
               </div>
               <button onClick={() => setViewW(null)} className="btn-outline w-full mt-2">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reset Password Modal */}
+      {resetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-lg font-bold">Reset Password — {resetTarget.name}</h2>
+              <button onClick={() => setResetTarget(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form onSubmit={handleResetPassword} className="p-6 space-y-4">
+              <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-500">Warden</span>
+                  <span className="font-semibold">{resetTarget.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Email</span>
+                  <span className="font-mono text-xs">{resetTarget.email}</span>
+                </div>
+              </div>
+              <div>
+                <label className="label">New Password</label>
+                <div className="relative">
+                  <input className="input pr-10" value={resetPw} required minLength={6}
+                    onChange={function(e) { setResetPw(e.target.value); }}
+                    placeholder="Min 6 characters" />
+                  <button type="button" onClick={() => copy(resetPw, 'Password')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                ⚠️ The warden's current password will be replaced. They will also receive an email with the new password.
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setResetTarget(null)} className="btn-outline flex-1">Cancel</button>
+                <button type="submit" disabled={resetting}
+                  className="flex-1 py-2 bg-blue-500 text-white text-sm font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50">
+                  {resetting ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Result Modal */}
+      {resetResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-lg font-bold">Password Reset Successfully</h2>
+              <button onClick={() => setResetResult(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 font-medium">
+                ✅ Password reset. An email with the new password has been sent.
+              </div>
+              {[['Email', resetResult.email], ['New Password', resetResult.password]].map(function(item) {
+                return (
+                  <div key={item[0]} className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 flex justify-between border-b">
+                      <span className="text-xs font-bold text-gray-500 uppercase">{item[0]}</span>
+                      <button onClick={() => copy(item[1], item[0])}
+                        className="text-xs text-accent font-semibold flex items-center gap-1">
+                        <Copy size={12} /> Copy
+                      </button>
+                    </div>
+                    <div className="px-4 py-3 font-mono text-sm select-all">{item[1]}</div>
+                  </div>
+                );
+              })}
+              <button onClick={() => setResetResult(null)} className="btn-primary w-full">Done</button>
             </div>
           </div>
         </div>

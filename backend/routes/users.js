@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getUsers, getStudents, getStudent, getMyStudentProfile,
-  createStudent, createWarden, updateStudent, toggleUserStatus, deleteUser,
+  createStudent, createWarden, updateStudent, toggleUserStatus, deleteUser, resetPassword,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -17,5 +17,7 @@ router.get('/students/:id', getStudent);
 router.put('/students/:id', updateStudent);
 router.put('/:id/toggle-status', authorize('admin'), toggleUserStatus);
 router.delete('/:id', authorize('admin'), deleteUser);
+
+router.put('/:id/reset-password', authorize('admin'), resetPassword);
 
 module.exports = router;

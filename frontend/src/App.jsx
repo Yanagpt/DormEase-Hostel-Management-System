@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminStudents from './pages/admin/Students';
 import AdminRooms from './pages/admin/Rooms';
@@ -9,6 +10,8 @@ import AdminFees from './pages/admin/Fees';
 import AdminComplaints from './pages/admin/Complaints';
 import AdminLeaves from './pages/admin/Leaves';
 import AdminNotices from './pages/admin/Notices';
+import AdminApprovals from './pages/admin/Approvals';
+import AdminSettings from './pages/admin/Settings';
 import AdminWardens from './pages/admin/Wardens';
 import WardenDashboard from './pages/warden/Dashboard';
 import WardenStudents from './pages/warden/Students';
@@ -52,6 +55,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AppLayout role="admin" /></ProtectedRoute>}>
@@ -63,6 +67,8 @@ export default function App() {
           <Route path="leaves" element={<AdminLeaves />} />
           <Route path="notices" element={<AdminNotices />} />
           <Route path="wardens" element={<AdminWardens />} />
+          <Route path="approvals" element={<AdminApprovals />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
 
         {/* Warden routes */}

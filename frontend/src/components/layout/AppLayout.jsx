@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Home, Building2, Users, DollarSign, AlertCircle, CalendarDays,
-  Bell, Settings, LogOut, User2, Shield,
+  Bell, Settings, LogOut, User2, Shield, CheckCircle2, Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,8 @@ const NAV = {
     { label: 'Leave Requests', icon: CalendarDays, to: '/admin/leaves' },
     { label: 'Notices', icon: Bell, to: '/admin/notices' },
     { label: 'Wardens', icon: Shield, to: '/admin/wardens' },
+    { label: 'Approvals', icon: CheckCircle2, to: '/admin/approvals' },
+    { label: 'Settings', icon: Settings, to: '/admin/settings' },
   ],
   warden: [
     { label: 'Dashboard', icon: Home, to: '/warden' },

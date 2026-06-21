@@ -40,6 +40,15 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
+  rejectionReason: {
+    type: String,
+    default: '',
+  },
   lastLogin: {
     type: Date,
   },
@@ -60,9 +69,12 @@ userSchema.virtual('studentProfile', {
   justOne: true,
 });
 
-// Hash password before saving
+// Hash password before saving — only if it's a new plaintext password
+// bcrypt hashes always start with $2a$ or $2b$, so we skip already-hashed values
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+  // If already hashed (e.g. from seed or direct DB ops), skip
+  if (this.password && this.password.startsWith('$2')) return next();
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   if (!this.isNew) this.passwordChangedAt = Date.now() - 1000;

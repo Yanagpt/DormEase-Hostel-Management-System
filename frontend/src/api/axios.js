@@ -12,15 +12,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 — only clear this tab's session, not other tabs
+// Handle 401 globally — but DON'T redirect if already on login/register
+// (that would cause the page reload you're seeing)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-      window.location.href = '/login';
+      const onAuthPage = ['/login', '/register'].some(function(p) {
+        return window.location.pathname.startsWith(p);
+      });
+      if (!onAuthPage) {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
+    // Always pass the error to the calling catch block
     return Promise.reject(error);
   }
 );

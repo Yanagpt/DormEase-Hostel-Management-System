@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const Student = require('../models/Student');
+const Room = require('../models/Room');
+const bcrypt = require('bcryptjs');
 const { paginate, paginatedResponse } = require('../utils/pagination');
+const { sendEmail, templates } = require('../utils/email');
 
 // @desc    Get all users (admin)
 // @route   GET /api/users
@@ -39,7 +42,6 @@ const getStudents = async (req, res) => {
   if (feeStatus) studentFilter.feeStatus = feeStatus;
   if (room) studentFilter.room = room;
 
-  // If searching, find matching users first
   if (search) {
     const matchingUsers = await User.find({
       role: 'student',
@@ -79,7 +81,6 @@ const getStudent = async (req, res) => {
 
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
 
-  // Students can only view their own profile
   if (req.user.role === 'student') {
     const myStudent = await Student.findOne({ user: req.user._id });
     if (!myStudent || myStudent._id.toString() !== student._id.toString()) {
@@ -109,27 +110,32 @@ const createStudent = async (req, res) => {
   const {
     name, email, password, phone,
     rollNumber, course, year, department, gender, dateOfBirth,
-    parentName, parentPhone, parentEmail,
-    address,
+    parentName, parentPhone, parentEmail, address,
   } = req.body;
 
-  const user = await User.create({ name, email, password: password || 'Password@123', role: 'student', phone });
+  const finalPassword = password || 'Password@123';
+
+  const user = await User.create({
+    name, email, password: finalPassword, role: 'student', phone,
+    approvalStatus: 'approved', // admin-created accounts are pre-approved
+    isActive: true,
+  });
 
   const student = await Student.create({
     user: user._id,
-    rollNumber,
-    course,
-    year,
-    department,
-    gender,
-    dateOfBirth,
-    parentName,
-    parentPhone,
-    parentEmail,
-    address,
+    rollNumber, course, year, department, gender, dateOfBirth,
+    parentName, parentPhone, parentEmail, address,
+    status: 'active',
   });
 
   await student.populate('user', 'name email phone');
+
+  // Notify the student their account is ready
+  sendEmail({
+    to: email,
+    subject: 'DormEase — Your Account is Ready',
+    html: templates.approved(name, email),
+  }).catch(() => {});
 
   res.status(201).json({ success: true, message: 'Student created successfully.', data: student });
 };
@@ -142,41 +148,46 @@ const createWarden = async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ success: false, message: 'Name, email and password are required.' });
   }
+
   const user = await User.create({
     name, email, password, phone, role: 'warden',
+    approvalStatus: 'approved',
+    isActive: true,
   });
+
+  sendEmail({
+    to: email,
+    subject: 'DormEase — Your Warden Account is Ready',
+    html: templates.approved(name, email),
+  }).catch(() => {});
+
   res.status(201).json({
     success: true,
     message: 'Warden created successfully.',
     data: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      isActive: user.isActive,
+      id: user._id, name: user.name, email: user.email,
+      phone: user.phone, role: user.role, isActive: user.isActive,
       createdAt: user.createdAt,
     },
   });
 };
 
-
+// @desc    Update student profile
+// @route   PUT /api/users/students/:id
 // @access  Admin, Warden, Self
 const updateStudent = async (req, res) => {
   const student = await Student.findById(req.params.id);
   if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
 
-  // Students can only update their own profile and limited fields
   if (req.user.role === 'student') {
     const myStudent = await Student.findOne({ user: req.user._id });
     if (!myStudent || myStudent._id.toString() !== student._id.toString()) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
-    // Students can only update certain fields
     const { parentName, parentPhone, parentEmail, address, emergencyContact } = req.body;
     Object.assign(student, { parentName, parentPhone, parentEmail, address, emergencyContact });
   } else {
-    const { room, ...rest } = req.body; // Room changes go through room controller
+    const { room, ...rest } = req.body;
     Object.assign(student, rest);
   }
 
@@ -187,7 +198,7 @@ const updateStudent = async (req, res) => {
   res.json({ success: true, message: 'Student updated.', data: student });
 };
 
-// @desc    Toggle user active status
+// @desc    Toggle user active status (deactivate / activate) — does NOT delete
 // @route   PUT /api/users/:id/toggle-status
 // @access  Admin
 const toggleUserStatus = async (req, res) => {
@@ -196,12 +207,17 @@ const toggleUserStatus = async (req, res) => {
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ success: false, message: 'You cannot deactivate your own account.' });
   }
-  user.isActive = !user.isActive;
-  await user.save({ validateBeforeSave: false });
-  res.json({ success: true, message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully.`, data: { isActive: user.isActive } });
+  const newStatus = !user.isActive;
+  await User.updateOne({ _id: user._id }, { $set: { isActive: newStatus } });
+  res.json({
+    success: true,
+    message: 'User ' + (newStatus ? 'activated' : 'deactivated') + ' successfully.',
+    data: { isActive: newStatus },
+  });
 };
 
-// @desc    Delete user (admin)
+// @desc    Permanently delete a user (student or warden) — separate, more
+//          destructive action than deactivate. Admin only.
 // @route   DELETE /api/users/:id
 // @access  Admin
 const deleteUser = async (req, res) => {
@@ -210,21 +226,63 @@ const deleteUser = async (req, res) => {
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
   }
+  if (user.role === 'admin') {
+    return res.status(400).json({ success: false, message: 'Admin accounts cannot be deleted.' });
+  }
+
   if (user.role === 'student') {
     const student = await Student.findOne({ user: user._id });
     if (student) {
       if (student.room) {
-        const Room = require('../models/Room');
         await Room.findByIdAndUpdate(student.room, { $pull: { occupants: student._id } });
       }
       await student.deleteOne();
     }
   }
+
   await user.deleteOne();
-  res.json({ success: true, message: 'User deleted successfully.' });
+  res.json({ success: true, message: (user.role === 'warden' ? 'Warden' : 'Student') + ' deleted permanently.' });
+};
+
+// @desc    Admin resets a student or warden's password (e.g. they forgot it)
+// @route   PUT /api/users/:id/reset-password
+// @access  Admin
+const resetPassword = async (req, res) => {
+  const { newPassword } = req.body;
+  const password = newPassword || 'Password@123';
+
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+  }
+
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+  const hash = await bcrypt.hash(password, 12);
+
+  // Native MongoDB update bypasses the pre-save hook entirely — guarantees
+  // the password is hashed exactly once, with no risk of double-hashing.
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { password: hash, updatedAt: new Date() } }
+  );
+
+  // Notify the user by email — fire and forget, never block the response
+  sendEmail({
+    to: user.email,
+    subject: 'DormEase — Your Password Has Been Reset',
+    html: templates.passwordReset(user.name, user.email, password),
+  }).catch(() => {});
+
+  res.json({
+    success: true,
+    message: 'Password reset successfully for ' + user.name + '.',
+    data: { email: user.email, newPassword: password },
+  });
 };
 
 module.exports = {
   getUsers, getStudents, getStudent, getMyStudentProfile,
-  createStudent, createWarden, updateStudent, toggleUserStatus, deleteUser,
+  createStudent, createWarden, updateStudent,
+  toggleUserStatus, deleteUser, resetPassword,
 };

@@ -1,6 +1,8 @@
 const Payment = require('../models/Payment');
 const Student = require('../models/Student');
+const User = require('../models/User');
 const { paginate, paginatedResponse } = require('../utils/pagination');
+const { sendEmail, templates } = require('../utils/email');
 
 const getPayments = async (req, res) => {
   const { skip, limit, page } = paginate(req.query);
@@ -17,7 +19,7 @@ const getPayments = async (req, res) => {
   }
 
   if (search) {
-    const users = await require('../models/User').find({
+    const users = await User.find({
       name: { $regex: search, $options: 'i' }, role: 'student',
     }).select('_id');
     filter.$or = [
@@ -28,7 +30,7 @@ const getPayments = async (req, res) => {
 
   const [payments, total] = await Promise.all([
     Payment.find(filter)
-      .populate('student', 'name email')
+      .populate('student', 'name email phone')
       .populate('recordedBy', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -67,7 +69,7 @@ const createPayment = async (req, res) => {
     recordedBy: req.user._id,
   });
 
-  await payment.populate('student', 'name email');
+  await payment.populate('student', 'name email phone');
   res.status(201).json({ success: true, message: 'Payment record created.', data: payment });
 };
 
@@ -93,18 +95,67 @@ const markPaymentPaid = async (req, res) => {
     student: payment.student,
     status: { $in: ['pending', 'overdue'] },
   });
-
   if (studentPendingPayments === 0) {
     await Student.findOneAndUpdate({ user: payment.student }, { feeStatus: 'paid' });
   }
 
-  await payment.populate('student', 'name email');
+  // Email the receipt — fire and forget, never blocks the response
+  const studentUser = await User.findById(payment.student);
+  if (studentUser) {
+    sendEmail({
+      to: studentUser.email,
+      subject: 'DormEase — Payment Receipt (' + payment.receiptNumber + ')',
+      html: templates.paymentReceipt(studentUser.name, payment),
+    }).catch(() => {});
+  }
+
+  await payment.populate('student', 'name email phone');
   res.json({ success: true, message: 'Payment marked as paid.', data: payment });
+};
+
+// @desc    Get a single receipt with full details for printing/PDF
+// @route   GET /api/payments/:id/receipt
+// @access  Admin, Warden, Student (own only)
+const getReceipt = async (req, res) => {
+  const payment = await Payment.findById(req.params.id)
+    .populate('student', 'name email phone')
+    .populate('recordedBy', 'name role');
+
+  if (!payment) return res.status(404).json({ success: false, message: 'Payment record not found.' });
+  if (payment.status !== 'paid') {
+    return res.status(400).json({ success: false, message: 'Receipt is only available for paid payments.' });
+  }
+  if (req.user.role === 'student' && payment.student._id.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+
+  // Pull student's room/roll number for the receipt header
+  const studentProfile = await Student.findOne({ user: payment.student._id })
+    .populate('room', 'roomNumber floor block');
+
+  res.json({
+    success: true,
+    data: {
+      payment,
+      student: {
+        name: payment.student.name,
+        email: payment.student.email,
+        phone: payment.student.phone,
+        rollNumber: studentProfile?.rollNumber,
+        room: studentProfile?.room,
+      },
+      hostel: {
+        name: 'DormEase Hostel',
+        address: 'Campus Road, Education City',
+        contact: '+91 99999 00001',
+        email: 'admin@dormease.com',
+      },
+    },
+  });
 };
 
 const getPaymentStats = async (req, res) => {
   const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
 
   const [totalCollected, pending, overdue, monthlyStats] = await Promise.all([
     Payment.aggregate([
@@ -137,4 +188,4 @@ const getPaymentStats = async (req, res) => {
   });
 };
 
-module.exports = { getPayments, getPayment, createPayment, markPaymentPaid, getPaymentStats };
+module.exports = { getPayments, getPayment, createPayment, markPaymentPaid, getReceipt, getPaymentStats };
