@@ -1,65 +1,71 @@
 /**
- * Email utility — sends transactional emails via SMTP (nodemailer).
- * Configure SMTP credentials in .env:
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+ * Email utility — sends transactional emails via Resend's HTTP API.
  *
- * If SMTP is not configured, emails are logged to console instead of
- * failing the request — this keeps the app usable in dev without setup.
+ * Why Resend instead of SMTP/Gmail?
+ * Render (and most PaaS free tiers) block outbound SMTP ports (25, 465, 587)
+ * on free/starter plans, which causes Gmail SMTP to time out or get refused.
+ * Resend sends mail over a normal HTTPS POST request, so it works
+ * everywhere Render allows outbound HTTPS — no port issues at all.
+ *
+ * Setup:
+ *   1. Sign up free at https://resend.com  (no card required)
+ *   2. Verify your sending domain OR use their default
+ *      "onboarding@resend.dev" sender for testing (no domain needed).
+ *   3. Create an API key → copy it.
+ *   4. Add to your .env:
+ *        RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
+ *        EMAIL_FROM=DormEase <onboarding@resend.dev>
+ *
+ * If RESEND_API_KEY is not set, emails are logged to console instead of
+ * failing the request — keeps the app usable without setup.
  */
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-let transporter = null;
+let resendClient = null;
 
-function getTransporter() {
-  if (transporter) return transporter;
-
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    return null; // not configured
-  }
-
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
-  return transporter;
+function getClient() {
+  if (resendClient) return resendClient;
+  if (!process.env.RESEND_API_KEY) return null;
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
 }
 
 /**
- * Send an email. Falls back to console logging if SMTP isn't configured,
- * so registration/approval flows never break in local dev.
+ * Send an email. Falls back to console logging if Resend isn't configured,
+ * so registration/approval flows never break in local dev or before setup.
  */
 async function sendEmail({ to, subject, html }) {
-  const t = getTransporter();
+  const client = getClient();
 
-  if (!t) {
-    console.log('\n📧 [EMAIL NOT SENT — SMTP not configured]');
+  if (!client) {
+    console.log('\n📧 [EMAIL NOT SENT — RESEND_API_KEY not configured]');
     console.log('   To:', to);
     console.log('   Subject:', subject);
-    console.log('   (Set SMTP_HOST, SMTP_USER, SMTP_PASS in .env to enable real emails)\n');
-    return { sent: false, reason: 'SMTP not configured' };
+    console.log('   (Set RESEND_API_KEY and EMAIL_FROM in .env to enable real emails)\n');
+    return { sent: false, reason: 'Resend not configured' };
   }
 
   try {
-    await t.sendMail({
-      from: process.env.SMTP_FROM || '"DormEase" <basantrauniyar09@gmail.com>',
+    const result = await client.emails.send({
+      from: process.env.EMAIL_FROM || 'DormEase <onboarding@resend.dev>',
       to,
       subject,
       html,
     });
-    return { sent: true };
+
+    if (result.error) {
+      console.error('❌ Resend error:', result.error.message);
+      return { sent: false, reason: result.error.message };
+    }
+
+    return { sent: true, id: result.data?.id };
   } catch (err) {
     console.error('❌ Email send failed:', err.message);
     return { sent: false, reason: err.message };
   }
 }
 
-/* ── Email templates ─────────────────────────────────────────── */
+/* ── Email templates (unchanged from before) ────────────────────── */
 
 const wrapTemplate = (title, bodyHtml) => `
 <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #f8fafc; padding: 32px 24px;">
