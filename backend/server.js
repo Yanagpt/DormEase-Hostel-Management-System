@@ -17,6 +17,7 @@ const leaveRoutes = require('./routes/leaves');
 const noticeRoutes = require('./routes/notices');
 const paymentRoutes = require('./routes/payments');
 const dashboardRoutes = require('./routes/dashboard');
+const attendanceRoutes = require('./routes/attendance');
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // 404 handler
 app.use((req, res) => {

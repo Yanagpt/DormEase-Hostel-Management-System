@@ -5,29 +5,30 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT token from this tab's sessionStorage (isolated per tab)
+// Read token from localStorage (persists across browser restarts)
+const getToken = () => localStorage.getItem('de_token');
+
+// Attach JWT on every request
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('token');
+  const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle 401 globally — but DON'T redirect if already on login/register
-// (that would cause the page reload you're seeing)
+// Handle 401 globally — token expired or invalid
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const onAuthPage = ['/login', '/register'].some(function(p) {
-        return window.location.pathname.startsWith(p);
-      });
+      const onAuthPage = ['/login', '/register'].some(p =>
+        window.location.pathname.startsWith(p)
+      );
       if (!onAuthPage) {
-        sessionStorage.removeItem('token');
-        sessionStorage.removeItem('user');
+        localStorage.removeItem('de_token');
+        localStorage.removeItem('de_user');
         window.location.href = '/login';
       }
     }
-    // Always pass the error to the calling catch block
     return Promise.reject(error);
   }
 );

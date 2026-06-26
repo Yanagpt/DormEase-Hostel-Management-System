@@ -1,6 +1,7 @@
 require('dotenv').config({ path: '../.env' });
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const readline = require('readline');
 
 const User    = require('../models/User');
 const Student = require('../models/Student');
@@ -12,10 +13,16 @@ const connectDB = async () => {
   console.log('✅ Connected to MongoDB');
 };
 
+// Prompt helper
+function prompt(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => rl.question(question, ans => { rl.close(); resolve(ans.trim()); }));
+}
+
 const seed = async () => {
   await connectDB();
 
-  console.log('🗑️  Clearing existing data...');
+  console.log('\n🗑️  Clearing existing data...');
   await Promise.all([
     User.deleteMany({}),
     Student.deleteMany({}),
@@ -26,20 +33,31 @@ const seed = async () => {
     require('../models/Payment').deleteMany({}),
   ]);
 
-  const hashedPassword = await bcrypt.hash('Password@123', 12);
+  // ── Prompt for admin credentials (no hardcoded password) ──
+  console.log('\n🔐 Set up the Admin account (you will use these to log in):\n');
+  const adminName  = await prompt('   Admin name  : ');
+  const adminEmail = await prompt('   Admin email : ');
 
-  // ── Only admin is seeded — everyone else must register and be approved ──
+  let adminPassword;
+  while (true) {
+    adminPassword = await prompt('   Password    : ');
+    if (adminPassword.length >= 6) break;
+    console.log('   ⚠️  Password must be at least 6 characters. Try again.');
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 12);
+
   const admin = await User.create({
-    name: 'Super Admin',
-    email: 'admin@dormease.com',
+    name: adminName || 'Super Admin',
+    email: adminEmail.toLowerCase(),
     password: hashedPassword,
     role: 'admin',
-    phone: '+91 99999 00001',
     isActive: true,
     approvalStatus: 'approved',
+    passwordSet: true,
   });
 
-  // ── Seed some rooms so admin has something to work with ──
+  // ── Seed rooms ──
   await Room.insertMany([
     { roomNumber: '101', floor: 1, block: 'A', type: 'triple',  capacity: 3, monthlyRent: 8000,  amenities: ['wifi', 'wardrobe', 'study-table'] },
     { roomNumber: '102', floor: 1, block: 'A', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'ac', 'wardrobe'] },
@@ -53,19 +71,16 @@ const seed = async () => {
     { roomNumber: '403', floor: 4, block: 'B', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'wardrobe'] },
   ]);
 
-  // ── Seed a welcome notice ──
   await Notice.create({
     title: 'Welcome to DormEase',
-    body: 'DormEase is now live. Students and wardens can register and await admin approval before accessing the portal.',
+    body: 'DormEase is now live. Students and wardens can register and await admin approval.',
     tag: 'general',
     postedBy: admin._id,
     isPinned: true,
   });
 
   console.log('\n✅ Seed complete!\n');
-  console.log('🔐 Admin Login:');
-  console.log('   Email:    admin@dormease.com');
-  console.log('   Password: Password@123\n');
+  console.log(`🔐 Admin login: ${adminEmail}`);
   console.log('ℹ️  All other users must register via the portal and be approved by admin.\n');
 
   await mongoose.connection.close();

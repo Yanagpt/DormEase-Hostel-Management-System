@@ -37,7 +37,7 @@ export default function StudentDashboard() {
         <StatCard label="My Room" value={room?.roomNumber || 'N/A'} sub={room ? `Floor ${room.floor} · Block ${room.block}` : 'Not assigned'} icon={Building2} color="#7c3aed" />
         <StatCard label="Fee Status" value={student?.feeStatus === 'paid' ? 'Paid' : 'Pending'} sub="Current semester" icon={DollarSign} color={student?.feeStatus === 'paid' ? '#059669' : '#d97706'} />
         <StatCard label="Complaints" value={stats.openComplaints} sub="Open issues" icon={AlertCircle} color="#d97706" />
-        <StatCard label="Attendance" value={`${stats.attendance}%`} sub="This month" icon={TrendingUp} color="#0d9488" trend={3} />
+        <StatCard label="Attendance" value={student?.attendance != null ? `${student.attendance}%` : '—'} sub="Last 30 days" icon={TrendingUp} color="#0d9488" />
       </div>
 
       <div className="grid grid-cols-3 gap-5">

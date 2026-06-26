@@ -12,6 +12,7 @@ import AdminLeaves from './pages/admin/Leaves';
 import AdminNotices from './pages/admin/Notices';
 import AdminApprovals from './pages/admin/Approvals';
 import AdminSettings from './pages/admin/Settings';
+import AdminAttendance from './pages/admin/Attendance';
 import AdminWardens from './pages/admin/Wardens';
 import WardenDashboard from './pages/warden/Dashboard';
 import WardenStudents from './pages/warden/Students';
@@ -19,6 +20,7 @@ import WardenComplaints from './pages/warden/Complaints';
 import WardenLeaves from './pages/warden/Leaves';
 import WardenRooms from './pages/warden/Rooms';
 import WardenNotices from './pages/warden/Notices';
+import WardenAttendance from './pages/warden/Attendance';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentRoom from './pages/student/Room';
 import StudentFees from './pages/student/Fees';
@@ -26,27 +28,37 @@ import StudentComplaints from './pages/student/Complaints';
 import StudentLeaves from './pages/student/Leaves';
 import StudentNotices from './pages/student/Notices';
 import StudentProfile from './pages/student/Profile';
+import StudentAttendance from './pages/student/Attendance';
 import AppLayout from './components/layout/AppLayout';
 import LoadingScreen from './components/common/LoadingScreen';
 
+const ROLE_MAP = { admin: '/admin', warden: '/warden', student: '/student' };
+
+// Redirects logged-in users to their dashboard; shows loader during auth check
 const ProtectedRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    const redirectMap = { admin: '/admin', warden: '/warden', student: '/student' };
-    return <Navigate to={redirectMap[user.role] || '/login'} replace />;
+    return <Navigate to={ROLE_MAP[user.role] || '/login'} replace />;
   }
   return children;
 };
 
-// Shows landing for guests, dashboard for logged-in users
+// Prevents logged-in users from seeing /login or /register
+const PublicOnlyRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (user) return <Navigate to={ROLE_MAP[user.role] || '/'} replace />;
+  return children;
+};
+
+// Root: show landing for guests, redirect to dashboard for logged-in users
 const RootRedirect = () => {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <LandingPage />;
-  const redirectMap = { admin: '/admin', warden: '/warden', student: '/student' };
-  return <Navigate to={redirectMap[user.role] || '/login'} replace />;
+  return <Navigate to={ROLE_MAP[user.role] || '/login'} replace />;
 };
 
 export default function App() {
@@ -54,8 +66,8 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
+        <Route path="/register" element={<PublicOnlyRoute><RegisterPage /></PublicOnlyRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AppLayout role="admin" /></ProtectedRoute>}>
@@ -67,6 +79,7 @@ export default function App() {
           <Route path="leaves" element={<AdminLeaves />} />
           <Route path="notices" element={<AdminNotices />} />
           <Route path="wardens" element={<AdminWardens />} />
+          <Route path="attendance" element={<AdminAttendance />} />
           <Route path="approvals" element={<AdminApprovals />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
@@ -79,6 +92,7 @@ export default function App() {
           <Route path="complaints" element={<WardenComplaints />} />
           <Route path="leaves" element={<WardenLeaves />} />
           <Route path="notices" element={<WardenNotices />} />
+          <Route path="attendance" element={<WardenAttendance />} />
         </Route>
 
         {/* Student routes */}
@@ -89,6 +103,7 @@ export default function App() {
           <Route path="complaints" element={<StudentComplaints />} />
           <Route path="leaves" element={<StudentLeaves />} />
           <Route path="notices" element={<StudentNotices />} />
+          <Route path="attendance" element={<StudentAttendance />} />
           <Route path="profile" element={<StudentProfile />} />
         </Route>
 

@@ -1,143 +1,276 @@
 /**
- * Email utility — sends transactional emails via Resend's HTTP API.
- *
- * Why Resend instead of SMTP/Gmail?
- * Render (and most PaaS free tiers) block outbound SMTP ports (25, 465, 587)
- * on free/starter plans, which causes Gmail SMTP to time out or get refused.
- * Resend sends mail over a normal HTTPS POST request, so it works
- * everywhere Render allows outbound HTTPS — no port issues at all.
- *
- * Setup:
- *   1. Sign up free at https://resend.com  (no card required)
- *   2. Verify your sending domain OR use their default
- *      "onboarding@resend.dev" sender for testing (no domain needed).
- *   3. Create an API key → copy it.
- *   4. Add to your .env:
- *        RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
- *        EMAIL_FROM=DormEase <onboarding@resend.dev>
- *
- * If RESEND_API_KEY is not set, emails are logged to console instead of
- * failing the request — keeps the app usable without setup.
+ * DormEase Email Utility — all emails via Google Apps Script webhook.
+ * Set APPS_SCRIPT_URL and FRONTEND_URL in backend/.env
  */
-const { Resend } = require('resend');
 
-let resendClient = null;
+async function sendViaAppsScript({ to, subject, html }) {
+  const url = process.env.APPS_SCRIPT_URL;
 
-function getClient() {
-  if (resendClient) return resendClient;
-  if (!process.env.RESEND_API_KEY) return null;
-  resendClient = new Resend(process.env.RESEND_API_KEY);
-  return resendClient;
-}
-
-/**
- * Send an email. Falls back to console logging if Resend isn't configured,
- * so registration/approval flows never break in local dev or before setup.
- */
-async function sendEmail({ to, subject, html }) {
-  const client = getClient();
-
-  if (!client) {
-    console.log('\n📧 [EMAIL NOT SENT — RESEND_API_KEY not configured]');
-    console.log('   To:', to);
-    console.log('   Subject:', subject);
-    console.log('   (Set RESEND_API_KEY and EMAIL_FROM in .env to enable real emails)\n');
-    return { sent: false, reason: 'Resend not configured' };
+  if (!url) {
+    console.log('\n📧 [EMAIL — set APPS_SCRIPT_URL in .env to send]');
+    console.log('   To:', to, '| Subject:', subject, '\n');
+    return { sent: false, reason: 'APPS_SCRIPT_URL not set' };
   }
 
   try {
-    const result = await client.emails.send({
-      from: process.env.EMAIL_FROM || 'DormEase <onboarding@resend.dev>',
-      to,
-      subject,
-      html,
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html }),
     });
 
-    if (result.error) {
-      console.error('❌ Resend error:', result.error.message);
-      return { sent: false, reason: result.error.message };
+    const text = await res.text();
+
+    if (text.trim().startsWith('<')) {
+      console.error('❌ Apps Script returned HTML — check /exec URL and "Anyone" access setting.');
+      return { sent: false, reason: 'Apps Script misconfigured' };
     }
 
-    return { sent: true, id: result.data?.id };
+    const json = JSON.parse(text);
+    if (json.success) {
+      console.log(`✅ Email sent → ${to}`);
+      return { sent: true };
+    }
+
+    console.error('❌ Apps Script error:', json.error || 'Unknown error');
+    return { sent: false, reason: json.error || 'Unknown error',};
+
   } catch (err) {
-    console.error('❌ Email send failed:', err.message);
+    console.error('❌ Email failed:', err.message);
     return { sent: false, reason: err.message };
   }
 }
 
-/* ── Email templates (unchanged from before) ────────────────────── */
+async function sendEmail({ to, subject, html }) {
+  return sendViaAppsScript({ to, subject, html });
+}
 
-const wrapTemplate = (title, bodyHtml) => `
-<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #f8fafc; padding: 32px 24px;">
-  <div style="background: #fff; border-radius: 16px; padding: 32px; border: 1px solid #eaecf4;">
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 24px;">
-      <div style="width: 32px; height: 32px; border-radius: 9px; background: #e94560; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px;">D</div>
-      <span style="font-weight: 700; font-size: 16px; color: #0f0f23;">DormEase</span>
-    </div>
-    <h2 style="margin: 0 0 16px; font-size: 18px; color: #0f0f23;">${title}</h2>
-    ${bodyHtml}
-    <p style="margin-top: 28px; font-size: 12px; color: #9ca3af;">This is an automated message from DormEase Hostel Management System.</p>
-  </div>
-</div>
-`;
+async function sendOtpEmail({ to, name, otp, purpose = 'login' }) {
+  const subject = purpose === 'login'
+    ? 'DormEase — Your Login OTP'
+    : 'DormEase — Verify Your Email';
+
+  const result = await sendViaAppsScript({ to, subject, html: templates.otp(name, otp, purpose) });
+
+  if (!result.sent) {
+    console.log(`\n🔐 [OTP for ${to}]: ${otp}  (expires 10 min)\n`);
+  }
+
+  return result;
+}
+
+// ── Shared layout ─────────────────────────────────────────────────────────────
+
+const FRONTEND = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+
+const layout = (content) => `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DormEase</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px;">
+  <tr><td align="center">
+    <table width="100%" style="max-width:520px;">
+
+      <!-- Header -->
+      <tr><td style="background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%);border-radius:16px 16px 0 0;padding:32px 40px;text-align:center;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td align="center" style="padding-bottom:16px;">
+              <div style="display:inline-block;width:48px;height:48px;background:#e94560;border-radius:14px;line-height:48px;text-align:center;font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;">D</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center">
+              <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px;">DormEase</span>
+              <span style="display:block;font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;font-weight:500;letter-spacing:0.05em;">HOSTEL MANAGEMENT SYSTEM</span>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <!-- Body -->
+      <tr><td style="background:#ffffff;padding:36px 40px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+        ${content}
+      </td></tr>
+
+      <!-- Footer -->
+      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:20px 40px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;">This is an automated email from DormEase. Please do not reply.</p>
+        <p style="margin:0;font-size:11px;color:#cbd5e1;">© ${new Date().getFullYear()} DormEase · Hostel Management System</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+
+// ── Reusable blocks ───────────────────────────────────────────────────────────
+
+const greeting = (name) =>
+  `<p style="margin:0 0 8px;font-size:15px;color:#1e293b;font-weight:700;">Hi ${name} 👋</p>`;
+
+const para = (text) =>
+  `<p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.7;">${text}</p>`;
+
+const divider = () =>
+  `<div style="height:1px;background:#e2e8f0;margin:24px 0;"></div>`;
+
+const infoBox = ({ bg, border, rows }) => {
+  const rowsHtml = rows.map(([label, value, valueColor]) =>
+    `<tr>
+      <td style="padding:8px 0;font-size:13px;color:#64748b;font-weight:600;width:40%;">${label}</td>
+      <td style="padding:8px 0;font-size:13px;color:${valueColor || '#1e293b'};font-weight:700;text-align:right;">${value}</td>
+    </tr>`
+  ).join('<tr><td colspan="2"><div style="height:1px;background:' + border + ';opacity:0.4;"></div></td></tr>');
+
+  return `
+  <div style="background:${bg};border:1.5px solid ${border};border-radius:12px;padding:4px 20px;margin:20px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      ${rowsHtml}
+    </table>
+  </div>`;
+};
+
+const ctaButton = (text, url, color = '#4f46e5') =>
+  `<table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
+    <tr><td align="center">
+      <a href="${url}" style="display:inline-block;background:${color};color:#fff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;letter-spacing:0.01em;">
+        ${text}
+      </a>
+    </td></tr>
+  </table>
+  <p style="text-align:center;margin:8px 0 0;font-size:11px;color:#94a3b8;">Or copy this link: <a href="${url}" style="color:#6366f1;word-break:break-all;">${url}</a></p>`;
+
+const statusBadge = (label, color, bg) =>
+  `<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;color:${color};background:${bg};letter-spacing:0.04em;">${label}</span>`;
+
+// ── Templates ─────────────────────────────────────────────────────────────────
 
 const templates = {
-  registrationReceived: (name, role) => wrapTemplate(
-    'Registration Received',
-    `<p style="color:#374151;font-size:14px;line-height:1.6;">Hi ${name},</p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">
-       Thank you for registering as a <strong>${role}</strong> on DormEase. Your request has been submitted and is now pending review by the hostel admin.
-     </p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">You'll receive another email once your account is approved and ready to use.</p>`
+
+  registrationReceived: (name, role) => layout(
+    greeting(name) +
+    para(`Thank you for registering as a <strong>${role.charAt(0).toUpperCase() + role.slice(1)}</strong> on DormEase. Your request has been received and is currently under review by the hostel admin.`) +
+    infoBox({
+      bg: '#fefce8', border: '#fde68a',
+      rows: [
+        ['Status', statusBadge('Pending Review', '#92400e', '#fef3c7'), ''],
+        ['Role', role.charAt(0).toUpperCase() + role.slice(1), '#1e293b'],
+        ['Email', name, '#1e293b'],
+      ]
+    }) +
+    para("We'll notify you by email as soon as the admin reviews your request. This usually takes 1–2 business days.") +
+    divider() +
+    para(`<span style="font-size:12px;color:#94a3b8;">Questions? Contact the hostel administration directly.</span>`)
   ),
 
-  approved: (name, email) => wrapTemplate(
-    'Your Account Has Been Approved! 🎉',
-    `<p style="color:#374151;font-size:14px;line-height:1.6;">Hi ${name},</p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">
-       Great news — your DormEase account has been <strong style="color:#059669;">approved</strong> by the admin. You can now log in using your registered email and password.
-     </p>
-     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin:16px 0;">
-       <p style="margin:0;font-size:13px;color:#166534;"><strong>Login Email:</strong> ${email}</p>
-     </div>`
+  approved: (name, email, role = 'user') => layout(
+    `<div style="text-align:center;margin-bottom:28px;">
+      <div style="display:inline-block;width:64px;height:64px;background:#dcfce7;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">✅</div>
+      <h2 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#1e293b;">You're Approved!</h2>
+      <p style="margin:0;font-size:14px;color:#64748b;">Your DormEase account is ready</p>
+    </div>` +
+    greeting(name) +
+    para(`Congratulations! Your ${role} account on DormEase has been <strong style="color:#16a34a;">approved</strong> by the hostel administrator. You can now log in and get started.`) +
+    infoBox({
+      bg: '#f0fdf4', border: '#86efac',
+      rows: [
+        ['Account Status', statusBadge('Approved', '#166534', '#dcfce7'), ''],
+        ['Login Email', email, '#1e293b'],
+        ['Role', role.charAt(0).toUpperCase() + role.slice(1), '#1e293b'],
+      ]
+    }) +
+    para('Click the button below to open DormEase. Enter your email, verify with a one-time OTP, and set your password — takes less than a minute!') +
+    ctaButton('🚀 Open DormEase & Login', `${FRONTEND()}/login`, 'linear-gradient(135deg,#4f46e5,#7c3aed)') +
+    divider() +
+    para(`<span style="font-size:12px;color:#94a3b8;"><strong>First time logging in?</strong> Enter your email → receive OTP → verify → set your password. Simple!</span>`)
   ),
 
-  rejected: (name, reason) => wrapTemplate(
-    'Update on Your DormEase Registration',
-    `<p style="color:#374151;font-size:14px;line-height:1.6;">Hi ${name},</p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">
-       We're sorry to inform you that your registration request was <strong style="color:#dc2626;">not approved</strong>.
-     </p>
-     ${reason ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 16px;margin:16px 0;"><p style="margin:0;font-size:13px;color:#991b1b;"><strong>Reason:</strong> ${reason}</p></div>` : ''}
-     <p style="color:#374151;font-size:14px;line-height:1.6;">If you believe this is a mistake, please contact the hostel administration.</p>`
+  rejected: (name, reason) => layout(
+    `<div style="text-align:center;margin-bottom:28px;">
+      <div style="display:inline-block;width:64px;height:64px;background:#fee2e2;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">❌</div>
+      <h2 style="margin:0 0 6px;font-size:20px;font-weight:800;color:#1e293b;">Registration Update</h2>
+    </div>` +
+    greeting(name) +
+    para('We regret to inform you that your DormEase registration request was <strong style="color:#dc2626;">not approved</strong> at this time.') +
+    (reason ? infoBox({
+      bg: '#fef2f2', border: '#fca5a5',
+      rows: [['Reason', reason, '#991b1b']]
+    }) : '') +
+    para('If you believe this is a mistake or would like to appeal this decision, please contact the hostel administration directly.') +
+    divider() +
+    para(`<span style="font-size:12px;color:#94a3b8;">You may re-register with corrected information if applicable.</span>`)
   ),
 
-  passwordReset: (name, email, newPassword) => wrapTemplate(
-    'Your Password Has Been Reset',
-    `<p style="color:#374151;font-size:14px;line-height:1.6;">Hi ${name},</p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">
-       Your DormEase account password has been reset by the administrator. Use the credentials below to log in:
-     </p>
-     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin:16px 0;">
-       <p style="margin:0 0 4px;font-size:13px;color:#1e40af;"><strong>Email:</strong> ${email}</p>
-       <p style="margin:0;font-size:13px;color:#1e40af;"><strong>New Password:</strong> ${newPassword}</p>
-     </div>
-     <p style="color:#9ca3af;font-size:12px;line-height:1.6;">For security, please change your password after logging in.</p>`
+  otp: (name, otp, purpose) => layout(
+    `<div style="text-align:center;margin-bottom:28px;">
+      <div style="display:inline-block;width:64px;height:64px;background:#eff6ff;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">🔐</div>
+      <h2 style="margin:0 0 6px;font-size:20px;font-weight:800;color:#1e293b;">${purpose === 'login' ? 'Your Login OTP' : 'Verify Your Email'}</h2>
+    </div>` +
+    greeting(name) +
+    para(purpose === 'login'
+      ? 'Use the one-time password below to complete your login. It expires in <strong>10 minutes</strong>.'
+      : 'Use the code below to verify your email address.') +
+    `<div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:16px;padding:28px 20px;margin:24px 0;text-align:center;">
+      <p style="margin:0 0 8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">One-Time Password</p>
+      <p style="margin:0;font-size:44px;font-weight:900;color:#1e40af;letter-spacing:0.25em;font-family:'Courier New',monospace;">${otp}</p>
+      <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">⏱ Valid for <strong>10 minutes</strong> only</p>
+    </div>` +
+    infoBox({
+      bg: '#fff7ed', border: '#fed7aa',
+      rows: [['⚠️ Security', 'Never share this OTP with anyone. DormEase will never ask for it.', '#92400e']]
+    })
   ),
 
-  paymentReceipt: (name, receipt) => wrapTemplate(
-    'Payment Receipt — ' + receipt.receiptNumber,
-    `<p style="color:#374151;font-size:14px;line-height:1.6;">Hi ${name},</p>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">Your payment has been received. Here are the details:</p>
-     <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-       <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Receipt No.</td><td style="padding:6px 0;text-align:right;font-weight:600;font-size:13px;">${receipt.receiptNumber}</td></tr>
-       <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Amount</td><td style="padding:6px 0;text-align:right;font-weight:700;font-size:14px;color:#059669;">₹${receipt.amount.toLocaleString()}</td></tr>
-       <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Fee Type</td><td style="padding:6px 0;text-align:right;font-size:13px;text-transform:capitalize;">${receipt.feeType.replace(/-/g,' ')}</td></tr>
-       <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Payment Method</td><td style="padding:6px 0;text-align:right;font-size:13px;text-transform:capitalize;">${(receipt.paymentMethod||'—').replace(/-/g,' ')}</td></tr>
-       <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Paid On</td><td style="padding:6px 0;text-align:right;font-size:13px;">${new Date(receipt.paidDate).toLocaleDateString('en-IN')}</td></tr>
-     </table>
-     <p style="color:#374151;font-size:14px;line-height:1.6;">You can view and download the full receipt anytime from your DormEase fee history.</p>`
+  passwordReset: (name, email, newPassword) => layout(
+    greeting(name) +
+    para('Your DormEase account password has been <strong>reset</strong> by the administrator. Use the credentials below to log in.') +
+    infoBox({
+      bg: '#eff6ff', border: '#bfdbfe',
+      rows: [
+        ['Email', email, '#1e40af'],
+        ['New Password', newPassword, '#1e40af'],
+      ]
+    }) +
+    ctaButton('Login to DormEase', `${FRONTEND()}/login`, 'linear-gradient(135deg,#4f46e5,#7c3aed)') +
+    para('<span style="font-size:12px;color:#94a3b8;">For your security, please change this password immediately after logging in.</span>')
+  ),
+
+  billPaid: (name, receipt) => layout(
+    `<div style="text-align:center;margin-bottom:28px;">
+      <div style="display:inline-block;width:64px;height:64px;background:#dcfce7;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">💳</div>
+      <h2 style="margin:0 0 6px;font-size:20px;font-weight:800;color:#1e293b;">Payment Confirmed</h2>
+    </div>` +
+    greeting(name) +
+    para(`Your fee payment of <strong style="color:#16a34a;font-size:16px;">₹${receipt.amount?.toLocaleString()}</strong> has been successfully recorded.`) +
+    infoBox({
+      bg: '#f0fdf4', border: '#86efac',
+      rows: [
+        ['Status', statusBadge('Paid', '#166534', '#dcfce7'), ''],
+        ['Receipt No.', receipt.receiptNumber, '#1e293b'],
+        ['Amount', '₹' + receipt.amount?.toLocaleString(), '#16a34a'],
+        ['Date', new Date(receipt.paidDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), '#1e293b'],
+      ]
+    }) +
+    ctaButton('View Receipt in DormEase', `${FRONTEND()}/student`, '#16a34a')
+  ),
+
+  paymentReceipt: (name, receipt) => layout(
+    greeting(name) +
+    para('Your payment has been received and processed. Here is your receipt:') +
+    infoBox({
+      bg: '#f8fafc', border: '#cbd5e1',
+      rows: [
+        ['Receipt No.', receipt.receiptNumber, '#1e293b'],
+        ['Amount', '₹' + receipt.amount?.toLocaleString(), '#16a34a'],
+        ['Fee Type', (receipt.feeType || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), '#1e293b'],
+        ['Method', (receipt.paymentMethod || '—').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), '#1e293b'],
+        ['Paid On', new Date(receipt.paidDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), '#1e293b'],
+      ]
+    }) +
+    ctaButton('View Full Receipt', `${FRONTEND()}/student`, '#4f46e5')
   ),
 };
 
-module.exports = { sendEmail, templates };
+module.exports = { sendEmail, sendOtpEmail, templates };

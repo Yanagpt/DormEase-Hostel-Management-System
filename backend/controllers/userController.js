@@ -249,36 +249,41 @@ const deleteUser = async (req, res) => {
 // @access  Admin
 const resetPassword = async (req, res) => {
   const { newPassword } = req.body;
-  const password = newPassword || 'Password@123';
 
-  if (password.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
   }
 
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
-  const hash = await bcrypt.hash(password, 12);
+  const hash = await bcrypt.hash(newPassword, 12);
 
-  // Native MongoDB update bypasses the pre-save hook entirely — guarantees
-  // the password is hashed exactly once, with no risk of double-hashing.
   await User.updateOne(
     { _id: user._id },
-    { $set: { password: hash, updatedAt: new Date() } }
+    { $set: { password: hash, passwordSet: true, updatedAt: new Date() } }
   );
 
-  // Notify the user by email — fire and forget, never block the response
+  // Email the user their new password
   sendEmail({
     to: user.email,
     subject: 'DormEase — Your Password Has Been Reset',
-    html: templates.passwordReset(user.name, user.email, password),
-  }).catch(() => {});
-
-  res.json({
-    success: true,
-    message: 'Password reset successfully for ' + user.name + '.',
-    data: { email: user.email, newPassword: password },
+    html: templates.passwordReset(user.name, user.email, newPassword),
+  }).catch((err) => {
+    console.error('❌ Failed to send password reset email to', user.email, ':', err.message);
   });
+
+  console.log(`🔑 Admin reset password for ${user.name} (${user.email})`);
+
+ res.json({
+  success: true,
+  message: `Password reset successfully. An email has been sent to ${user.email}.`,
+  data: {
+    name: user.name,
+    email: user.email,
+    newPassword
+  }
+});
 };
 
 module.exports = {

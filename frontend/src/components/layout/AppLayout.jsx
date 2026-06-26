@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Home, Building2, Users, DollarSign, AlertCircle, CalendarDays,
-  Bell, Settings, LogOut, User2, Shield, CheckCircle2, Plus,
+  Bell, Settings, LogOut, User2, Shield, CheckCircle2, Plus, UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,7 @@ const NAV = {
     { label: 'Leave Requests', icon: CalendarDays, to: '/admin/leaves' },
     { label: 'Notices', icon: Bell, to: '/admin/notices' },
     { label: 'Wardens', icon: Shield, to: '/admin/wardens' },
+    { label: 'Attendance', icon: UserCheck, to: '/admin/attendance' },
     { label: 'Approvals', icon: CheckCircle2, to: '/admin/approvals' },
     { label: 'Settings', icon: Settings, to: '/admin/settings' },
   ],
@@ -26,6 +27,7 @@ const NAV = {
     { label: 'Complaints', icon: AlertCircle, to: '/warden/complaints' },
     { label: 'Leave Requests', icon: CalendarDays, to: '/warden/leaves' },
     { label: 'Notices', icon: Bell, to: '/warden/notices' },
+    { label: 'Attendance', icon: UserCheck, to: '/warden/attendance' },
   ],
   student: [
     { label: 'Dashboard', icon: Home, to: '/student' },
@@ -34,6 +36,7 @@ const NAV = {
     { label: 'Complaints', icon: AlertCircle, to: '/student/complaints' },
     { label: 'Leave Requests', icon: CalendarDays, to: '/student/leaves' },
     { label: 'Notices', icon: Bell, to: '/student/notices' },
+    { label: 'Attendance', icon: UserCheck, to: '/student/attendance' },
     { label: 'Profile', icon: Settings, to: '/student/profile' },
   ],
 };
