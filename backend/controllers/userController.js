@@ -4,6 +4,7 @@ const Room = require('../models/Room');
 const bcrypt = require('bcryptjs');
 const { paginate, paginatedResponse } = require('../utils/pagination');
 const { sendEmail, templates } = require('../utils/email');
+const { hostelScope } = require('../middleware/auth');
 
 // @desc    Get all users (admin)
 // @route   GET /api/users
@@ -275,15 +276,11 @@ const resetPassword = async (req, res) => {
 
   console.log(`🔑 Admin reset password for ${user.name} (${user.email})`);
 
- res.json({
-  success: true,
-  message: `Password reset successfully. An email has been sent to ${user.email}.`,
-  data: {
-    name: user.name,
-    email: user.email,
-    newPassword
-  }
-});
+  res.json({
+    success: true,
+    message: `Password reset successfully. An email has been sent to ${user.email}.`,
+    data: { name: user.name, email: user.email,newPassword,},
+  });
 };
 
 module.exports = {

@@ -1,4 +1,5 @@
 const Payment = require('../models/Payment');
+const { hostelScope } = require('../middleware/auth');
 const Student = require('../models/Student');
 const User = require('../models/User');
 const { paginate, paginatedResponse } = require('../utils/pagination');
@@ -8,7 +9,7 @@ const getPayments = async (req, res) => {
   const { skip, limit, page } = paginate(req.query);
   const { status, feeType, search, month, year } = req.query;
 
-  const filter = {};
+  const filter = hostelScope(req);
   if (status) filter.status = status;
   if (feeType) filter.feeType = feeType;
   if (month) filter.month = Number(month);
@@ -56,7 +57,7 @@ const getPayment = async (req, res) => {
 const createPayment = async (req, res) => {
   const { studentId, amount, feeType, month, year, dueDate, paymentMethod, transactionId, remarks } = req.body;
 
-  const payment = await Payment.create({
+  const payment = await Payment.create({ hostel: req.hostelId,
     student: studentId,
     amount,
     feeType: feeType || 'hostel-fee',

@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'warden', 'student'],
+    enum: ['superadmin', 'admin', 'warden', 'student'],
     default: 'student',
   },
   phone: {
@@ -67,6 +67,12 @@ const userSchema = new mongoose.Schema({
     type: Date,
   },
   passwordChangedAt: Date,
+  // Multi-tenant: which hostel this user belongs to (null for superadmin)
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    default: null,
+  },
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -100,7 +106,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 // Generate JWT
 userSchema.methods.generateToken = function () {
   return jwt.sign(
-    { id: this._id, role: this.role },
+    { id: this._id, role: this.role, hostel: this.hostel },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
   );

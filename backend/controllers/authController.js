@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Student = require('../models/Student');
+const Hostel = require('../models/Hostel');
 const { sendEmail, sendOtpEmail, templates } = require('../utils/email');
 
 function generateOtp() {
@@ -14,6 +15,10 @@ async function buildUserPayload(user) {
     studentProfile = await Student.findOne({ user: user._id })
       .populate('room', 'roomNumber floor block');
   }
+  let hostelInfo = null;
+  if (user.hostel) {
+    hostelInfo = await Hostel.findById(user.hostel).select('name code type address status').lean();
+  }
   return {
     id: user._id,
     name: user.name,
@@ -22,6 +27,8 @@ async function buildUserPayload(user) {
     phone: user.phone,
     avatar: user.avatar,
     lastLogin: user.lastLogin,
+    hostel: hostelInfo,
+    hostelId: user.hostel,
     studentProfile,
   };
 }
@@ -30,9 +37,17 @@ async function buildUserPayload(user) {
 // @route  POST /api/auth/register
 // @access Public
 const register = async (req, res) => {
-  const { name, email, role, phone, rollNumber, course, department, year } = req.body;
+  const { name, email, role, phone, rollNumber, course, department, year, hostelId } = req.body;
 
-  if (!role || role === 'admin') {
+  if (!hostelId) {
+    return res.status(400).json({ success: false, message: 'Please select a hostel.' });
+  }
+  const hostel = await Hostel.findById(hostelId);
+  if (!hostel || hostel.status !== 'active') {
+    return res.status(400).json({ success: false, message: 'Selected hostel is not available.' });
+  }
+
+  if (!role || role === 'admin' || role === 'superadmin') {
     return res.status(400).json({ success: false, message: 'Invalid role for registration.' });
   }
   if (!['warden', 'student'].includes(role)) {
@@ -50,6 +65,7 @@ const register = async (req, res) => {
 
   const user = await User.create({
     name, email: email.toLowerCase().trim(), role, phone,
+    hostel: hostelId,
     approvalStatus: 'pending',
     isActive: false,
     passwordSet: false,
@@ -58,6 +74,7 @@ const register = async (req, res) => {
   if (role === 'student') {
     await Student.create({
       user: user._id,
+      hostel: hostelId,
       rollNumber,
       course: course || 'Not specified',
       department: department || '',
@@ -101,8 +118,12 @@ const checkEmail = async (req, res) => {
     return res.status(200).json({ success: true, code: 'NOT_FOUND' });
   }
 
+  if (user.role === 'superadmin') {
+    return res.status(200).json({ success: true, code: 'SUPERADMIN', name: user.name });
+  }
+
   if (user.role === 'admin') {
-    return res.status(200).json({ success: true, code: 'ADMIN', name: user.name });
+    return res.status(200).json({ success: true, code: 'ADMIN', name: user.name, hostel: user.hostel });
   }
 
   if (!user.isActive) {
@@ -138,7 +159,7 @@ const adminLogin = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email and password are required.' });
   }
 
-  const user = await User.findOne({ email: email.toLowerCase().trim(), role: 'admin' })
+  const user = await User.findOne({ email: email.toLowerCase().trim(), role: { $in: ['admin', 'superadmin'] } })
     .select('+password');
 
   if (!user) {
@@ -365,6 +386,10 @@ const getPendingRegistrations = async (req, res) => {
   const { role } = req.query;
   const filter = { approvalStatus: 'pending' };
   if (role) filter.role = role;
+  // Admin only sees their hostel's pending users
+  if (req.user.role === 'admin' && req.user.hostel) {
+    filter.hostel = req.user.hostel;
+  }
 
   const users = await User.find(filter).select('-password').sort({ createdAt: -1 });
 

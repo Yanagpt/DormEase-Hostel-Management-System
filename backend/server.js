@@ -18,6 +18,7 @@ const noticeRoutes = require('./routes/notices');
 const paymentRoutes = require('./routes/payments');
 const dashboardRoutes = require('./routes/dashboard');
 const attendanceRoutes = require('./routes/attendance');
+const hostelRoutes = require('./routes/hostels');
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/notices', noticeRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/hostels', hostelRoutes);
 
 // 404 handler
 app.use((req, res) => {

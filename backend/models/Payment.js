@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
+
   receiptNumber: {
     type: String,
     unique: true,

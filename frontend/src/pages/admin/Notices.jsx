@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Pin, Bell } from 'lucide-react';
+import { Plus, Trash2, Pin, Bell, Pencil } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import { PageHeader, Badge, Modal, Spinner, Pagination, EmptyState, ConfirmDialog, FormField } from '../../components/common/UI';
@@ -13,7 +13,8 @@ export default function AdminNotices() {
   const [loading, setLoading] = useState(true);
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null); // null = creating, otherwise editing this notice
   const [form, setForm] = useState(INIT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -32,13 +33,35 @@ export default function AdminNotices() {
 
   useEffect(() => { fetchNotices(); }, [fetchNotices]);
 
-  const handleCreate = async (e) => {
+  const openCreate = () => { setEditingId(null); setForm(INIT_FORM); setShowModal(true); };
+
+  const openEdit = (n) => {
+    setEditingId(n._id);
+    setForm({
+      title: n.title,
+      body: n.body,
+      tag: n.tag,
+      targetAudience: n.targetAudience,
+      isPinned: n.isPinned,
+      expiresAt: n.expiresAt ? n.expiresAt.slice(0, 10) : '',
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/notices', { ...form, expiresAt: form.expiresAt || null });
-      toast.success('Notice posted.');
-      setShowAdd(false);
+      const payload = { ...form, expiresAt: form.expiresAt || null };
+      if (editingId) {
+        await api.put(`/notices/${editingId}`, payload);
+        toast.success('Notice updated.');
+      } else {
+        await api.post('/notices', payload);
+        toast.success('Notice posted.');
+      }
+      setShowModal(false);
+      setEditingId(null);
       setForm(INIT_FORM);
       fetchNotices();
     } catch (err) { toast.error(err.response?.data?.message || 'Failed.'); }
@@ -68,7 +91,7 @@ export default function AdminNotices() {
     <div>
       <PageHeader title="Notices" subtitle="Post and manage hostel announcements"
         actions={
-          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
+          <button onClick={openCreate} className="btn-primary flex items-center gap-2">
             <Plus size={15} /> Post Notice
           </button>
         }
@@ -93,6 +116,9 @@ export default function AdminNotices() {
                     {n.isPinned && <Pin size={13} className="text-accent flex-shrink-0" />}
                     <Badge label={n.tag} variant={TAG_COLORS[n.tag] || 'blue'} />
                     <span className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleDateString('en-IN')}</span>
+                    {n.updatedAt && n.updatedAt !== n.createdAt && (
+                      <span className="text-xs text-gray-400 italic">· edited</span>
+                    )}
                     <span className="text-xs text-gray-400">· {n.views} views</span>
                     <span className="text-xs text-gray-400">· By {n.postedBy?.name}</span>
                   </div>
@@ -101,11 +127,18 @@ export default function AdminNotices() {
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => handleTogglePin(n)}
-                    className={`p-2 rounded-lg transition-colors ${n.isPinned ? 'bg-accent/10 text-accent' : 'hover:bg-gray-100 text-gray-400'}`}>
+                    className={`p-2 rounded-lg transition-colors ${n.isPinned ? 'bg-accent/10 text-accent' : 'hover:bg-gray-100 text-gray-400'}`}
+                    title={n.isPinned ? 'Unpin' : 'Pin to top'}>
                     <Pin size={14} />
                   </button>
+                  <button onClick={() => openEdit(n)}
+                    className="p-2 rounded-lg hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-colors"
+                    title="Edit notice">
+                    <Pencil size={14} />
+                  </button>
                   <button onClick={() => setConfirmDelete(n)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                    className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Delete notice">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -116,9 +149,9 @@ export default function AdminNotices() {
       )}
       <Pagination pagination={pagination} onPageChange={setPage} />
 
-      {/* Add Notice Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Post New Notice" size="lg">
-        <form onSubmit={handleCreate} className="space-y-4">
+      {/* Create / Edit Notice Modal */}
+      <Modal open={showModal} onClose={() => { setShowModal(false); setEditingId(null); }} title={editingId ? 'Edit Notice' : 'Post New Notice'} size="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <FormField label="Title"><input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="Notice title..." /></FormField>
           <FormField label="Body">
             <textarea className="input" rows={5} value={form.body}
@@ -145,8 +178,10 @@ export default function AdminNotices() {
             <span className="text-sm font-medium text-gray-700">Pin this notice to the top</span>
           </label>
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowAdd(false)} className="btn-outline">Cancel</button>
-            <button type="submit" disabled={submitting} className="btn-primary">{submitting ? 'Posting...' : 'Post Notice'}</button>
+            <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="btn-outline">Cancel</button>
+            <button type="submit" disabled={submitting} className="btn-primary">
+              {submitting ? (editingId ? 'Saving...' : 'Posting...') : (editingId ? 'Save Changes' : 'Post Notice')}
+            </button>
           </div>
         </form>
       </Modal>

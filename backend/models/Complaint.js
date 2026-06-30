@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
 const complaintSchema = new mongoose.Schema({
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
+
   complaintId: {
     type: String,
     unique: true,

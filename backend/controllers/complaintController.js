@@ -1,4 +1,5 @@
 const Complaint = require('../models/Complaint');
+const { hostelScope } = require('../middleware/auth');
 const Student = require('../models/Student');
 const { paginate, paginatedResponse } = require('../utils/pagination');
 
@@ -9,7 +10,7 @@ const getComplaints = async (req, res) => {
   const { skip, limit, page } = paginate(req.query);
   const { status, priority, category, search } = req.query;
 
-  const filter = {};
+  const filter = hostelScope(req);
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
   if (category) filter.category = category;
@@ -68,7 +69,7 @@ const createComplaint = async (req, res) => {
   // Get student's room
   const student = await Student.findOne({ user: req.user._id });
 
-  const complaint = await Complaint.create({
+  const complaint = await Complaint.create({ hostel: req.hostelId,
     student: req.user._id,
     room: student?.room || null,
     title,
@@ -131,6 +132,34 @@ const rateComplaint = async (req, res) => {
   res.json({ success: true, message: 'Rating submitted.', data: complaint });
 };
 
+// @desc    Edit complaint (student fixing their own open complaint)
+// @route   PUT /api/complaints/:id
+// @access  Student (own, only while open)
+const updateComplaint = async (req, res) => {
+  const { title, description, category, priority } = req.body;
+  const complaint = await Complaint.findById(req.params.id);
+  if (!complaint) return res.status(404).json({ success: false, message: 'Complaint not found.' });
+
+  if (req.user.role === 'student') {
+    if (complaint.student.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    if (complaint.status !== 'open') {
+      return res.status(400).json({ success: false, message: 'Can only edit complaints that are still open.' });
+    }
+  }
+
+  if (title !== undefined) complaint.title = title;
+  if (description !== undefined) complaint.description = description;
+  if (category !== undefined) complaint.category = category;
+  if (priority !== undefined) complaint.priority = priority;
+
+  await complaint.save();
+  await complaint.populate('student', 'name email');
+
+  res.json({ success: true, message: 'Complaint updated.', data: complaint });
+};
+
 // @desc    Delete complaint
 // @route   DELETE /api/complaints/:id
 // @access  Admin, Student(own)
@@ -149,4 +178,4 @@ const deleteComplaint = async (req, res) => {
   res.json({ success: true, message: 'Complaint deleted.' });
 };
 
-module.exports = { getComplaints, getComplaint, createComplaint, updateComplaintStatus, rateComplaint, deleteComplaint };
+module.exports = { getComplaints, getComplaint, createComplaint, updateComplaint, updateComplaintStatus, rateComplaint, deleteComplaint };

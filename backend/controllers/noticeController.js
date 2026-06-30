@@ -1,4 +1,5 @@
 const Notice = require('../models/Notice');
+const { hostelScope } = require('../middleware/auth');
 const { paginate, paginatedResponse } = require('../utils/pagination');
 
 const getNotices = async (req, res) => {
@@ -42,7 +43,7 @@ const getNotice = async (req, res) => {
 
 const createNotice = async (req, res) => {
   const { title, body, tag, targetAudience, isPinned, expiresAt } = req.body;
-  const notice = await Notice.create({
+  const notice = await Notice.create({ hostel: req.hostelId,
     title, body, tag: tag || 'general',
     targetAudience: targetAudience || 'all',
     isPinned: isPinned || false,

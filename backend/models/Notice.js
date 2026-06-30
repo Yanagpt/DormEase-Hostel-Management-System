@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
 const noticeSchema = new mongoose.Schema({
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
+
   title: {
     type: String,
     required: [true, 'Title is required'],

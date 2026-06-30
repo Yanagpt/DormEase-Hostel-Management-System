@@ -1,4 +1,5 @@
 const Leave = require('../models/Leave');
+const { hostelScope } = require('../middleware/auth');
 const { paginate, paginatedResponse } = require('../utils/pagination');
 
 // @desc    Get leave requests
@@ -8,7 +9,7 @@ const getLeaves = async (req, res) => {
   const { skip, limit, page } = paginate(req.query);
   const { status, search } = req.query;
 
-  const filter = {};
+  const filter = hostelScope(req);
   if (status) filter.status = status;
 
   if (req.user.role === 'student') {
@@ -74,7 +75,7 @@ const createLeave = async (req, res) => {
     });
   }
 
-  const leave = await Leave.create({
+  const leave = await Leave.create({ hostel: req.hostelId,
     student: req.user._id,
     fromDate,
     toDate,

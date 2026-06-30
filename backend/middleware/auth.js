@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Verify JWT token
+// Verify JWT and inject req.user + req.hostelId
 const protect = async (req, res, next) => {
   let token;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -20,6 +20,8 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Account has been deactivated.' });
     }
     req.user = user;
+    // Convenience shorthand used in all controllers for scoping queries
+    req.hostelId = user.hostel || null;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -42,4 +44,15 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize };
+// Scoped query helper — adds hostel filter automatically
+// Usage in controllers: const filter = hostelScope(req);
+const hostelScope = (req, extra = {}) => {
+  if (req.user.role === 'superadmin') {
+    // Super admin can optionally filter by hostel via query param
+    const hostelId = req.query.hostelId || null;
+    return hostelId ? { hostel: hostelId, ...extra } : { ...extra };
+  }
+  return { hostel: req.hostelId, ...extra };
+};
+
+module.exports = { protect, authorize, hostelScope };

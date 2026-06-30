@@ -154,7 +154,7 @@ export default function LoginPage() {
       const { code, name, reason } = res.data;
       setUserName(name || '');
 
-      if (code === 'ADMIN') {
+      if (code === 'SUPERADMIN' || code === 'ADMIN') {
         setIsAdmin(true);
         setStage('admin');
       } else if (code === 'FIRST_LOGIN') {
@@ -353,6 +353,10 @@ export default function LoginPage() {
             <p style={{ textAlign:'center', margin:0, color:'rgba(255,255,255,.28)', fontSize:'0.84rem' }}>
               New to DormEase?{' '}
               <Link to="/register" style={{ color:'#818cf8', fontWeight:700, textDecoration:'none' }}>Create account</Link>
+            </p>
+            <p style={{ textAlign:'center', marginTop:8, color:'rgba(255,255,255,0.22)', fontSize:'0.78rem' }}>
+              Run a hostel?{' '}
+              <Link to="/register-hostel" style={{ color:'rgba(255,255,255,0.45)', fontWeight:700, textDecoration:'none' }}>Register it here</Link>
             </p>
           </>
         )}

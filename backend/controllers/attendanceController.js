@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const Student = require('../models/Student');
 const User = require('../models/User');
+const { hostelScope } = require('../middleware/auth');
 
 // Helper: today's date as YYYY-MM-DD in local time
 function toDateStr(date = new Date()) {
@@ -21,7 +22,7 @@ function monthRange(year, month) {
 const getTodayAttendance = async (req, res) => {
   const today = toDateStr();
 
-  const students = await Student.find({ status: 'active' })
+  const students = await Student.find({ hostel: req.hostelId, status: 'active' })
     .populate('user', 'name email avatar')
     .populate('room', 'roomNumber block')
     .sort({ rollNumber: 1 })
@@ -73,7 +74,7 @@ const markAttendance = async (req, res) => {
 
   const record = await Attendance.findOneAndUpdate(
     { student: studentId, date: targetDate },
-    { status, note: note || '', markedBy: req.user.id, date: targetDate, student: studentId },
+    { status, note: note || '', markedBy: req.user.id, date: targetDate, student: studentId, hostel: req.hostelId },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).populate('markedBy', 'name role');
 
@@ -200,7 +201,7 @@ const getMonthlyOverview = async (req, res) => {
   const year  = parseInt(req.query.year)  || new Date().getFullYear();
   const { from, to } = monthRange(year, month);
 
-  const students = await Student.find({ status: 'active' })
+  const students = await Student.find({ hostel: req.hostelId, status: 'active' })
     .populate('user', 'name avatar')
     .populate('room', 'roomNumber block')
     .sort({ rollNumber: 1 })

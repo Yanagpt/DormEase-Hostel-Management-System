@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
 const leaveSchema = new mongoose.Schema({
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
+
   leaveId: {
     type: String,
     unique: true,

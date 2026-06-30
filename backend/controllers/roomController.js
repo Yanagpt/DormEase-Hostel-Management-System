@@ -1,6 +1,7 @@
 const Room = require('../models/Room');
 const Student = require('../models/Student');
 const { paginate, paginatedResponse } = require('../utils/pagination');
+const { hostelScope } = require('../middleware/auth');
 
 // @desc    Get all rooms
 // @route   GET /api/rooms
@@ -9,7 +10,7 @@ const getRooms = async (req, res) => {
   const { skip, limit, page } = paginate(req.query);
   const { status, floor, block, type, search } = req.query;
 
-  const filter = {};
+  const filter = hostelScope(req);
   if (status) filter.status = status;
   if (floor !== undefined) filter.floor = Number(floor);
   if (block) filter.block = block.toUpperCase();
@@ -45,7 +46,7 @@ const getRoom = async (req, res) => {
 // @route   POST /api/rooms
 // @access  Admin
 const createRoom = async (req, res) => {
-  const room = await Room.create(req.body);
+  const room = await Room.create({ ...req.body, hostel: req.hostelId });
   res.status(201).json({ success: true, message: 'Room created successfully.', data: room });
 };
 

@@ -30,9 +30,12 @@ import StudentNotices from './pages/student/Notices';
 import StudentProfile from './pages/student/Profile';
 import StudentAttendance from './pages/student/Attendance';
 import AppLayout from './components/layout/AppLayout';
+import SuperAdminDashboard from './pages/superadmin/Dashboard';
+import SuperAdminHostels from './pages/superadmin/Hostels';
+import RegisterHostelPage from './pages/RegisterHostelPage';
 import LoadingScreen from './components/common/LoadingScreen';
 
-const ROLE_MAP = { admin: '/admin', warden: '/warden', student: '/student' };
+const ROLE_MAP = { superadmin: '/superadmin', admin: '/admin', warden: '/warden', student: '/student' };
 
 // Redirects logged-in users to their dashboard; shows loader during auth check
 const ProtectedRoute = ({ children, roles }) => {
@@ -67,7 +70,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
+        <Route path="/register-hostel" element={<RegisterHostelPage />} />
         <Route path="/register" element={<PublicOnlyRoute><RegisterPage /></PublicOnlyRoute>} />
+
+        {/* Super Admin routes */}
+        <Route path="/superadmin" element={<ProtectedRoute roles={['superadmin']}><AppLayout role="superadmin" /></ProtectedRoute>}>
+          <Route index element={<SuperAdminDashboard />} />
+          <Route path="hostels" element={<SuperAdminHostels />} />
+        </Route>
 
         {/* Admin routes */}
         <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AppLayout role="admin" /></ProtectedRoute>}>

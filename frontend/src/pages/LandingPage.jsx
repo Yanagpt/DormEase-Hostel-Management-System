@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
   Building2, DollarSign, AlertCircle, Users, CalendarDays,
@@ -170,6 +170,12 @@ export default function LandingPage() {
           </nav>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/register-hostel" style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem', padding: '8px 12px', borderRadius: 8, transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+              className="de-nav-links"
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}>
+              <Building2 size={12} /> Register Your Hostel
+            </Link>
             <button onClick={goLogin} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.875rem', padding: '8px 10px', borderRadius: 8, transition: 'color 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               className="de-nav-links" /* hide on mobile via .de-nav-links display:none */
               onMouseEnter={e => e.target.style.color = '#fff'}
@@ -195,6 +201,10 @@ export default function LandingPage() {
             style={{ marginTop: 12, background: 'linear-gradient(135deg,#818cf8,#e94560)', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: '0.95rem', padding: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
             Sign In / Get Started
           </button>
+          <Link to="/register-hostel" onClick={() => setMenuOpen(false)}
+            style={{ marginTop: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, color: 'rgba(255,255,255,0.7)', fontWeight: 600, fontSize: '0.9rem', padding: '12px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Building2 size={14} /> Register Your Hostel
+          </Link>
         </div>
       </header>
 
@@ -225,6 +235,15 @@ export default function LandingPage() {
               <button onClick={goLogin} className="de-hero-btn-primary">Get Started Free <ArrowRight size={15} /></button>
               <button onClick={goLogin} className="de-hero-btn-secondary">View Live Demo</button>
             </div>
+
+            <p style={{ marginTop: -36, marginBottom: 56, fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)' }}>
+              Run a hostel?{' '}
+              <Link to="/register-hostel" style={{ color: '#818cf8', fontWeight: 700, textDecoration: 'none' }}
+                onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                onMouseLeave={e => e.target.style.textDecoration = 'none'}>
+                Register your hostel on DormEase →
+              </Link>
+            </p>
 
             {/* Stats */}
             <div className="de-stats-grid" style={{ ...glass, borderRadius: 16, overflow: 'hidden', maxWidth: 640, margin: '0 auto' }}>
@@ -364,6 +383,7 @@ export default function LandingPage() {
             </div>
             {[
               ['Product', ['Features', 'Pricing', 'Demo', 'Changelog']],
+              ['Get Started', [{ label: 'Student / Warden Sign Up', to: '/register' }, { label: 'Register Your Hostel', to: '/register-hostel' }, { label: 'Sign In', to: '/login' }]],
               ['Company', ['About Us', 'Blog', 'Careers']],
               ['Support', ['Help Center', 'Contact', 'Privacy']],
             ].map(([heading, links]) => (
@@ -371,9 +391,15 @@ export default function LandingPage() {
                 <h4 style={{ margin: '0 0 14px', fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{heading}</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {links.map(l => (
-                    <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.15s' }}
-                      onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
-                      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+                    typeof l === 'string' ? (
+                      <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.15s' }}
+                        onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+                        onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l}</a>
+                    ) : (
+                      <Link key={l.label} to={l.to} style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.15s' }}
+                        onMouseEnter={e => e.target.style.color = 'rgba(255,255,255,0.8)'}
+                        onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.35)'}>{l.label}</Link>
+                    )
                   ))}
                 </div>
               </div>

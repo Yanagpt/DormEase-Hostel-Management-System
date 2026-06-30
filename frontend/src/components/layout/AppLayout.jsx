@@ -7,6 +7,10 @@ import {
 import toast from 'react-hot-toast';
 
 const NAV = {
+  superadmin: [
+    { label: 'Dashboard',      icon: Home,      to: '/superadmin' },
+    { label: 'Manage Hostels', icon: Building2, to: '/superadmin/hostels' },
+  ],
   admin: [
     { label: 'Dashboard', icon: Home, to: '/admin' },
     { label: 'Students', icon: Users, to: '/admin/students' },
@@ -41,7 +45,7 @@ const NAV = {
   ],
 };
 
-const ROLE_LABELS = { admin: 'Admin Panel', warden: 'Warden Panel', student: 'Student Portal' };
+const ROLE_LABELS = { superadmin: 'Super Admin', admin: 'Admin Panel', warden: 'Warden Panel', student: 'Student Portal' };
 
 export default function AppLayout({ role }) {
   const { user, logout } = useAuth();

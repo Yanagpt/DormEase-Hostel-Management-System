@@ -33,7 +33,7 @@ async function sendViaAppsScript({ to, subject, html }) {
     }
 
     console.error('❌ Apps Script error:', json.error || 'Unknown error');
-    return { sent: false, reason: json.error || 'Unknown error',};
+    return { sent: false, reason: json.error || 'Unknown error' };
 
   } catch (err) {
     console.error('❌ Email failed:', err.message);
@@ -61,7 +61,7 @@ async function sendOtpEmail({ to, name, otp, purpose = 'login' }) {
 
 // ── Shared layout ─────────────────────────────────────────────────────────────
 
-const FRONTEND = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const FRONTEND = () => process.env.FRONTEND_URL || 'https://dorm-ease-hostel-management-system.vercel.app';
 
 const layout = (content) => `
 <!DOCTYPE html>
@@ -157,7 +157,7 @@ const templates = {
       rows: [
         ['Status', statusBadge('Pending Review', '#92400e', '#fef3c7'), ''],
         ['Role', role.charAt(0).toUpperCase() + role.slice(1), '#1e293b'],
-        ['Email', name, '#1e293b'],
+        ['Name', name, '#1e293b'],
       ]
     }) +
     para("We'll notify you by email as soon as the admin reviews your request. This usually takes 1–2 business days.") +
@@ -254,6 +254,74 @@ const templates = {
       ]
     }) +
     ctaButton('View Receipt in DormEase', `${FRONTEND()}/student`, '#16a34a')
+  ),
+
+  hostelRegistrationReceived: (contactName, hostelName) => layout(
+    greeting(contactName) +
+    para(`Thank you for registering <strong>${hostelName}</strong> on DormEase. Your application has been submitted and is under review by our super admin.`) +
+    infoBox({
+      bg: '#fefce8', border: '#fde68a',
+      rows: [
+        ['Status', statusBadge('Pending Review', '#92400e', '#fef3c7'), ''],
+        ['Hostel', hostelName, '#1e293b'],
+      ]
+    }) +
+    para("We'll notify you by email once your hostel is reviewed. This usually takes 1–2 business days.") +
+    divider() +
+    para('<span style="font-size:12px;color:#94a3b8;">Questions? Contact DormEase support.</span>')
+  ),
+
+  hostelApproved: (contactName, hostelName, code) => layout(
+  `<div style="text-align:center;margin-bottom:28px;">
+    <div style="display:inline-block;width:64px;height:64px;background:#dcfce7;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">🏨</div>
+    <h2 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#1e293b;">Hostel Approved!</h2>
+    <p style="margin:0;font-size:14px;color:#64748b;">${hostelName} is now live on DormEase</p>
+  </div>` +
+  greeting(contactName) +
+  para(`Great news! <strong>${hostelName}</strong> has been <strong style="color:#16a34a;">approved</strong> and is now active on DormEase.`) +
+  infoBox({
+    bg: '#f0fdf4',
+    border: '#86efac',
+    rows: [
+      ['Status', statusBadge('Approved', '#166534', '#dcfce7'), ''],
+      ['Hostel Name', hostelName, '#1e293b'],
+      ['Hostel Code', code, '#4f46e5'],
+    ]
+  }) +
+  para('An admin account will be created for your hostel shortly. You will receive another email with your login credentials.') +
+  ctaButton('Visit DormEase', FRONTEND(), 'linear-gradient(135deg,#4f46e5,#7c3aed)')
+),
+
+  hostelRejected: (contactName, hostelName, reason) => layout(
+  `<div style="text-align:center;margin-bottom:28px;">
+    <div style="display:inline-block;width:64px;height:64px;background:#fee2e2;border-radius:50%;line-height:64px;font-size:28px;margin-bottom:12px;">❌</div>
+    <h2 style="margin:0 0 6px;font-size:20px;font-weight:800;color:#1e293b;">Application Not Approved</h2>
+  </div>` +
+  greeting(contactName) +
+  para(`We're sorry to inform you that the registration for <strong>${hostelName}</strong> was not approved at this time.`) +
+  (reason ? infoBox({
+    bg: '#fef2f2',
+    border: '#fca5a5',
+    rows: [['Reason', reason, '#991b1b']]
+  }) : '') +
+  para('If you believe this is a mistake, please contact DormEase support.') +
+  divider() +
+  para('<span style="font-size:12px;color:#94a3b8;">You may reapply with updated information if applicable.</span>')
+),
+
+  adminAssigned: (name, email, password, hostelName) => layout(
+    greeting(name) +
+    para(`You have been assigned as the <strong>Administrator</strong> for <strong>${hostelName}</strong> on DormEase.`) +
+    infoBox({
+      bg: '#eff6ff', border: '#bfdbfe',
+      rows: [
+        ['Hostel', hostelName, '#1e40af'],
+        ['Email', email, '#1e40af'],
+        ['Password', password, '#1e40af'],
+      ]
+    }) +
+    ctaButton('Login to DormEase Admin Portal', `${FRONTEND()}/login`, 'linear-gradient(135deg,#4f46e5,#7c3aed)') +
+    para('<span style="font-size:12px;color:#94a3b8;">Please change your password after your first login.</span>')
   ),
 
   paymentReceipt: (name, receipt) => layout(

@@ -10,7 +10,6 @@ const studentSchema = new mongoose.Schema({
   rollNumber: {
     type: String,
     required: [true, 'Roll number is required'],
-    unique: true,
     trim: true,
     uppercase: true,
   },
@@ -89,6 +88,12 @@ const studentSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -96,7 +101,7 @@ const studentSchema = new mongoose.Schema({
 });
 
 // Indexes
-studentSchema.index({ rollNumber: 1 });
+studentSchema.index({ hostel: 1, rollNumber: 1 }, { unique: true });
 studentSchema.index({ room: 1 });
 studentSchema.index({ status: 1 });
 

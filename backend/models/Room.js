@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 
 const roomSchema = new mongoose.Schema({
+  hostel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hostel',
+    required: true,
+    index: true,
+  },
+
   roomNumber: {
     type: String,
     required: [true, 'Room number is required'],
-    unique: true,
     trim: true,
     uppercase: true,
   },
@@ -124,5 +130,8 @@ roomSchema.pre('save', function (next) {
 roomSchema.index({ roomNumber: 1 });
 roomSchema.index({ status: 1 });
 roomSchema.index({ floor: 1, block: 1 });
+
+// Room number unique per hostel
+roomSchema.index({ hostel: 1, roomNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Room', roomSchema);

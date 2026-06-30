@@ -7,13 +7,13 @@ const User    = require('../models/User');
 const Student = require('../models/Student');
 const Room    = require('../models/Room');
 const Notice  = require('../models/Notice');
+const Hostel  = require('../models/Hostel');
 
 const connectDB = async () => {
   await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dormease');
   console.log('✅ Connected to MongoDB');
 };
 
-// Prompt helper
 function prompt(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => rl.question(question, ans => { rl.close(); resolve(ans.trim()); }));
@@ -28,60 +28,93 @@ const seed = async () => {
     Student.deleteMany({}),
     Room.deleteMany({}),
     Notice.deleteMany({}),
+    Hostel.deleteMany({}),
     require('../models/Complaint').deleteMany({}),
     require('../models/Leave').deleteMany({}),
     require('../models/Payment').deleteMany({}),
+    require('../models/Attendance').deleteMany({}),
   ]);
 
-  // ── Prompt for admin credentials (no hardcoded password) ──
-  console.log('\n🔐 Set up the Admin account (you will use these to log in):\n');
-  const adminName  = await prompt('   Admin name  : ');
-  const adminEmail = await prompt('   Admin email : ');
-
-  let adminPassword;
+  // ── Super Admin ──────────────────────────────────────────────────────────
+  console.log('\n🔐 Set up the Super Admin account:\n');
+  const saName  = await prompt('   Super Admin name  : ');
+  const saEmail = await prompt('   Super Admin email : ');
+  let saPassword;
   while (true) {
-    adminPassword = await prompt('   Password    : ');
-    if (adminPassword.length >= 6) break;
-    console.log('   ⚠️  Password must be at least 6 characters. Try again.');
+    saPassword = await prompt('   Password          : ');
+    if (saPassword.length >= 6) break;
+    console.log('   ⚠️  Min 6 characters.');
   }
 
-  const hashedPassword = await bcrypt.hash(adminPassword, 12);
-
-  const admin = await User.create({
-    name: adminName || 'Super Admin',
-    email: adminEmail.toLowerCase(),
-    password: hashedPassword,
-    role: 'admin',
+  const saHash = await bcrypt.hash(saPassword, 12);
+  await User.create({
+    name: saName || 'Super Admin',
+    email: saEmail.toLowerCase(),
+    password: saHash,
+    role: 'superadmin',
     isActive: true,
     approvalStatus: 'approved',
     passwordSet: true,
+    hostel: null,
   });
+  console.log(`\n✅ Super Admin created: ${saEmail}`);
 
-  // ── Seed rooms ──
-  await Room.insertMany([
-    { roomNumber: '101', floor: 1, block: 'A', type: 'triple',  capacity: 3, monthlyRent: 8000,  amenities: ['wifi', 'wardrobe', 'study-table'] },
-    { roomNumber: '102', floor: 1, block: 'A', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'ac', 'wardrobe'] },
-    { roomNumber: '103', floor: 1, block: 'A', type: 'triple',  capacity: 3, monthlyRent: 8000,  amenities: ['wifi'], status: 'maintenance' },
-    { roomNumber: '201', floor: 2, block: 'A', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'ac', 'attached-bathroom'] },
-    { roomNumber: '202', floor: 2, block: 'A', type: 'triple',  capacity: 3, monthlyRent: 8000,  amenities: ['wifi', 'wardrobe'] },
-    { roomNumber: '301', floor: 3, block: 'A', type: 'quad',    capacity: 4, monthlyRent: 7000,  amenities: ['wifi', 'wardrobe', 'study-table'] },
-    { roomNumber: '302', floor: 3, block: 'A', type: 'single',  capacity: 1, monthlyRent: 15000, amenities: ['wifi', 'ac', 'attached-bathroom', 'fridge', 'tv'] },
-    { roomNumber: '401', floor: 4, block: 'B', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'ac'] },
-    { roomNumber: '402', floor: 4, block: 'B', type: 'triple',  capacity: 3, monthlyRent: 8000,  amenities: ['wifi'] },
-    { roomNumber: '403', floor: 4, block: 'B', type: 'double',  capacity: 2, monthlyRent: 10000, amenities: ['wifi', 'wardrobe'] },
-  ]);
+  // ── Demo hostel (optional) ────────────────────────────────────────────────
+  const createDemo = await prompt('\n📦 Create a demo hostel with admin? (y/n): ');
+  if (createDemo.toLowerCase() === 'y') {
+    const hostel = await Hostel.create({
+      name: 'DormEase Demo Hostel',
+      code: 'DEMO01',
+      type: 'co-ed',
+      status: 'active',
+      address: { city: 'Demo City', state: 'Demo State' },
+    });
 
-  await Notice.create({
-    title: 'Welcome to DormEase',
-    body: 'DormEase is now live. Students and wardens can register and await admin approval.',
-    tag: 'general',
-    postedBy: admin._id,
-    isPinned: true,
-  });
+    const adminEmail = await prompt('   Demo Admin email : ');
+    const adminPass  = await prompt('   Demo Admin password : ');
+    const adminHash  = await bcrypt.hash(adminPass, 12);
+
+    const admin = await User.create({
+      name: 'Demo Admin',
+      email: adminEmail.toLowerCase(),
+      password: adminHash,
+      role: 'admin',
+      hostel: hostel._id,
+      isActive: true,
+      approvalStatus: 'approved',
+      passwordSet: true,
+    });
+
+    await Hostel.findByIdAndUpdate(hostel._id, { admin: admin._id });
+
+    // Seed demo rooms
+    const rooms = [];
+    for (const r of [
+      { roomNumber: '101', floor: 1, block: 'A', type: 'double', capacity: 2, monthlyRent: 8000 },
+      { roomNumber: '102', floor: 1, block: 'A', type: 'triple', capacity: 3, monthlyRent: 7000 },
+      { roomNumber: '201', floor: 2, block: 'A', type: 'single', capacity: 1, monthlyRent: 12000 },
+      { roomNumber: '202', floor: 2, block: 'B', type: 'double', capacity: 2, monthlyRent: 8000 },
+    ]) {
+      rooms.push({ ...r, hostel: hostel._id, amenities: ['wifi', 'wardrobe'] });
+    }
+    await Room.insertMany(rooms);
+
+    await Notice.create({
+      title: 'Welcome to DormEase Demo Hostel',
+      body: 'This is the demo hostel. Students and wardens can register and await admin approval.',
+      tag: 'general',
+      postedBy: admin._id,
+      hostel: hostel._id,
+      isPinned: true,
+    });
+
+    console.log(`\n✅ Demo hostel created: DormEase Demo Hostel (code: DEMO01)`);
+    console.log(`✅ Demo admin: ${adminEmail}`);
+  }
 
   console.log('\n✅ Seed complete!\n');
-  console.log(`🔐 Admin login: ${adminEmail}`);
-  console.log('ℹ️  All other users must register via the portal and be approved by admin.\n');
+  console.log(`🔑 Super Admin: ${saEmail}`);
+  console.log('ℹ️  Log in as Super Admin to create and manage hostels.\n');
 
   await mongoose.connection.close();
   process.exit(0);
